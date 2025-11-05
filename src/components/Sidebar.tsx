@@ -20,7 +20,7 @@ export function Sidebar({
 }: SidebarProps) {
   return (
     <div
-      className={`bg-slate-800 text-white transition-all duration-300 flex flex-col ${
+      className={`bg-slate-800 text-white transition-all duration-300 flex flex-col border-r-2 border-dashed-white ${
         isCollapsed ? 'w-16' : 'w-64'
       }`}
     >
