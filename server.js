@@ -1,0 +1,273 @@
+import express from 'express';
+import multer from 'multer';
+import AdmZip from 'adm-zip';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import { promises as fs } from 'fs';
+import { exec, spawn } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const app = express();
+const PORT = 3001;
+
+// Guardar referencia al process global
+const nodeProcess = process;
+
+// Gestión de dev servers
+const devServers = new Map(); // { appName: { process, port } }
+let nextPort = 5173; // Puerto inicial para Vite
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + '-' + file.originalname);
+  }
+});
+
+const upload = multer({ storage });
+
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+app.use(express.json());
+app.use('/apps', express.static(join(__dirname, 'apps')));
+
+// Función para detectar si una app es Vite
+async function isViteApp(appPath) {
+  try {
+    const packageJsonPath = join(appPath, 'package.json');
+    const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
+    return packageJson.devDependencies?.vite || packageJson.dependencies?.vite;
+  } catch {
+    return false;
+  }
+}
+
+// Función para iniciar un dev server de Vite
+function startViteDevServer(appName, appPath, port) {
+  return new Promise((resolve, reject) => {
+    const childProcess = spawn('npm', ['run', 'dev', '--', '--port', port, '--host'], {
+      cwd: appPath,
+      shell: true,
+      env: { ...nodeProcess.env, FORCE_COLOR: '0' }
+    });
+
+    let isReady = false;
+
+    childProcess.stdout.on('data', (data) => {
+      const output = data.toString();
+      console.log(`[${appName}] ${output}`);
+      
+      if (!isReady && (output.includes('Local:') || output.includes('ready in'))) {
+        isReady = true;
+        devServers.set(appName, { process: childProcess, port });
+        resolve(port);
+      }
+    });
+
+    childProcess.stderr.on('data', (data) => {
+      console.error(`[${appName}] ${data.toString()}`);
+    });
+
+    childProcess.on('error', (error) => {
+      console.error(`Error starting dev server for ${appName}:`, error);
+      if (!isReady) reject(error);
+    });
+
+    childProcess.on('exit', (code) => {
+      console.log(`Dev server for ${appName} exited with code ${code}`);
+      devServers.delete(appName);
+    });
+
+    // Timeout si no está listo en 30 segundos
+    setTimeout(() => {
+      if (!isReady) {
+        reject(new Error('Timeout starting dev server'));
+      }
+    }, 30000);
+  });
+}
+
+// Función para detener un dev server
+function stopDevServer(appName) {
+  const server = devServers.get(appName);
+  if (server) {
+    server.process.kill();
+    devServers.delete(appName);
+  }
+}
+
+app.get('/api/apps', async (req, res) => {
+  try {
+    const appsDir = join(__dirname, 'apps');
+    const entries = await fs.readdir(appsDir, { withFileTypes: true });
+    const apps = await Promise.all(
+      entries
+        .filter(entry => entry.isDirectory())
+        .map(async entry => {
+          const appPath = join(appsDir, entry.name);
+          const isVite = await isViteApp(appPath);
+          const serverInfo = devServers.get(entry.name);
+          
+          return {
+            name: entry.name,
+            isVite,
+            devServerPort: serverInfo?.port,
+            isRunning: !!serverInfo
+          };
+        })
+    );
+    res.json(apps);
+  } catch (error) {
+    res.json([]);
+  }
+});
+
+// Endpoint para iniciar dev server
+app.post('/api/apps/:name/start', async (req, res) => {
+  try {
+    const { name } = req.params;
+    const appPath = join(__dirname, 'apps', name);
+    
+    if (devServers.has(name)) {
+      const server = devServers.get(name);
+      return res.json({ port: server.port, message: 'Dev server already running' });
+    }
+    
+    const isVite = await isViteApp(appPath);
+    if (!isVite) {
+      return res.status(400).json({ error: 'Not a Vite app' });
+    }
+    
+    const port = nextPort++;
+    await startViteDevServer(name, appPath, port);
+    
+    res.json({ port, message: 'Dev server started' });
+  } catch (error) {
+    console.error('Error starting dev server:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoint para detener dev server
+app.post('/api/apps/:name/stop', async (req, res) => {
+  try {
+    const { name } = req.params;
+    stopDevServer(name);
+    res.json({ message: 'Dev server stopped' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/upload', upload.single('module'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const zipPath = req.file.path;
+    const zip = new AdmZip(zipPath);
+    const zipEntries = zip.getEntries();
+
+    const moduleName = req.file.originalname.replace('.zip', '');
+    const targetDir = join(__dirname, 'apps', moduleName);
+
+    await fs.mkdir(targetDir, { recursive: true });
+    zip.extractAllTo(targetDir, true);
+
+    await fs.unlink(zipPath);
+
+    const hasPackageJson = await fs.access(join(targetDir, 'package.json'))
+      .then(() => true)
+      .catch(() => false);
+
+    let appType = 'html';
+    let mainFile = 'index.html';
+
+    if (hasPackageJson) {
+      appType = 'node';
+
+      res.write(JSON.stringify({
+        status: 'installing',
+        message: 'Instalando dependencias de Node.js...'
+      }) + '\n');
+
+      try {
+        await execAsync('npm install', { cwd: targetDir });
+
+        const packageJson = JSON.parse(
+          await fs.readFile(join(targetDir, 'package.json'), 'utf-8')
+        );
+
+        if (packageJson.scripts?.build) {
+          res.write(JSON.stringify({
+            status: 'building',
+            message: 'Compilando aplicación...'
+          }) + '\n');
+          await execAsync('npm run build', { cwd: targetDir });
+        }
+
+        if (packageJson.scripts?.start) {
+          mainFile = 'index.html';
+        }
+      } catch (error) {
+        console.error('Error installing dependencies:', error);
+      }
+    }
+
+    const distDir = join(targetDir, 'dist');
+    const hasDistDir = await fs.access(distDir)
+      .then(() => true)
+      .catch(() => false);
+
+    if (hasDistDir) {
+      mainFile = 'dist/index.html';
+    }
+
+    res.write(JSON.stringify({
+      status: 'complete',
+      message: 'Módulo cargado exitosamente',
+      app: {
+        name: moduleName,
+        type: appType,
+        mainFile
+      }
+    }) + '\n');
+    res.end();
+
+  } catch (error) {
+    console.error('Error processing upload:', error);
+    res.status(500).json({
+      status: 'error',
+      error: 'Error procesando el archivo'
+    });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
+
+// Limpiar dev servers al cerrar
+nodeProcess.on('SIGINT', () => {
+  console.log('\nShutting down dev servers...');
+  for (const [name, server] of devServers.entries()) {
+    console.log(`Stopping ${name}...`);
+    server.process.kill();
+  }
+  nodeProcess.exit();
+});
