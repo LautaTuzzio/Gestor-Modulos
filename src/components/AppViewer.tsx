@@ -3,14 +3,21 @@ import { AppInfo } from '../App';
 
 interface AppViewerProps {
   selectedApp: AppInfo | null;
+  showDocs: boolean;
+  docsHtml: string;
 }
 
-export function AppViewer({ selectedApp }: AppViewerProps) {
+export function AppViewer({ selectedApp, showDocs, docsHtml }: AppViewerProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [iframeUrl, setIframeUrl] = useState<string | null>(null);
 
   useEffect(() => {
+    if (showDocs) {
+      setIframeUrl(null);
+      return;
+    }
+
     if (!selectedApp) {
       setIframeUrl(null);
       return;
@@ -52,7 +59,23 @@ export function AppViewer({ selectedApp }: AppViewerProps) {
     };
 
     startDevServerAndLoad();
-  }, [selectedApp]);
+  }, [selectedApp, showDocs]);
+
+  if (showDocs) {
+    return (
+      <div className="flex-1 flex flex-col bg-gradient-to-br from-slate-900 to-slate-800">
+        <div className="p-4 border-b border-slate-700 text-white">
+          <h2 className="text-xl font-semibold">Documentación</h2>
+          <p className="text-sm text-slate-300">Pasos para agregar un módulo</p>
+        </div>
+        <iframe
+          srcDoc={docsHtml}
+          className="flex-1 w-full h-full border-none"
+          title="Documentación: cómo agregar un módulo"
+        />
+      </div>
+    );
+  }
 
   if (!selectedApp) {
     return (

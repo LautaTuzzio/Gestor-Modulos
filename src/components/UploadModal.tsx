@@ -5,7 +5,7 @@ import { Modal } from './Modal';
 interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onUploadComplete: () => void;
+  onUploadComplete: (moduleName: string) => void;
 }
 
 type UploadStatus = 'idle' | 'uploading' | 'installing' | 'building' | 'complete' | 'error';
@@ -14,7 +14,17 @@ export function UploadModal({ isOpen, onClose, onUploadComplete }: UploadModalPr
   const [status, setStatus] = useState<UploadStatus>('idle');
   const [message, setMessage] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [moduleName, setModuleName] = useState('');
+  const [nameError, setNameError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const sanitizeModuleName = (value: string) => {
+    return value
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-zA-Z0-9-_]/g, '')
+      .toLowerCase();
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -22,6 +32,10 @@ export function UploadModal({ isOpen, onClose, onUploadComplete }: UploadModalPr
       setSelectedFile(file);
       setStatus('idle');
       setMessage('');
+      const baseName = file.name.replace(/\.zip$/i, '');
+      const sanitized = sanitizeModuleName(baseName);
+      setModuleName(sanitized || baseName);
+      setNameError('');
     } else {
       setMessage('Por favor selecciona un archivo .zip');
       setStatus('error');
@@ -31,7 +45,14 @@ export function UploadModal({ isOpen, onClose, onUploadComplete }: UploadModalPr
   const handleUpload = async () => {
     if (!selectedFile) return;
 
+    const sanitizedName = sanitizeModuleName(moduleName);
+    if (!sanitizedName) {
+      setNameError('Ingresa un nombre válido (letras, números, guiones o guiones bajos).');
+      return;
+    }
+
     const formData = new FormData();
+    formData.append('moduleName', sanitizedName);
     formData.append('module', selectedFile);
 
     try {
@@ -68,7 +89,7 @@ export function UploadModal({ isOpen, onClose, onUploadComplete }: UploadModalPr
                 setStatus('complete');
                 setMessage(data.message);
                 setTimeout(() => {
-                  onUploadComplete();
+                  onUploadComplete(data.app?.name || sanitizedName);
                   handleClose();
                 }, 2000);
               } else if (data.status === 'error') {
@@ -92,6 +113,8 @@ export function UploadModal({ isOpen, onClose, onUploadComplete }: UploadModalPr
     setStatus('idle');
     setMessage('');
     setSelectedFile(null);
+    setModuleName('');
+    setNameError('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -155,6 +178,28 @@ export function UploadModal({ isOpen, onClose, onUploadComplete }: UploadModalPr
                 hover:file:bg-blue-100
                 file:cursor-pointer cursor-pointer"
             />
+            {selectedFile && (
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-slate-700" htmlFor="module-name-input">
+                  Nombre del módulo
+                </label>
+                <input
+                  id="module-name-input"
+                  type="text"
+                  value={moduleName}
+                  onChange={(event) => {
+                    setModuleName(event.target.value);
+                    setNameError('');
+                  }}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="ej. panel-reportes"
+                />
+                <p className="text-xs text-slate-500">
+                  Se usará para crear la carpeta en <code>/apps</code>. Solo letras, números, guiones y guiones bajos.
+                </p>
+                {nameError && <p className="text-xs text-red-600">{nameError}</p>}
+              </div>
+            )}
             <button
               onClick={handleUpload}
               disabled={!selectedFile}

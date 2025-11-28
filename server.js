@@ -32,6 +32,48 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
+const RESERVED_MODULE_NAMES = new Set([
+  'con',
+  'prn',
+  'aux',
+  'nul',
+  'com1',
+  'com2',
+  'com3',
+  'com4',
+  'com5',
+  'com6',
+  'com7',
+  'com8',
+  'com9',
+  'lpt1',
+  'lpt2',
+  'lpt3',
+  'lpt4',
+  'lpt5',
+  'lpt6',
+  'lpt7',
+  'lpt8',
+  'lpt9'
+]);
+
+function sanitizeModuleName(value) {
+  if (!value) return '';
+  const sanitized = value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-_]/g, '')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
+
+  if (!sanitized || RESERVED_MODULE_NAMES.has(sanitized) || sanitized.length > 64) {
+    return '';
+  }
+
+  return sanitized;
+}
+
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -180,16 +222,47 @@ app.post('/api/upload', upload.single('module'), async (req, res) => {
     }
 
     const zipPath = req.file.path;
-    const zip = new AdmZip(zipPath);
-    const zipEntries = zip.getEntries();
+    const removeUploadedZip = async () => {
+      try {
+        await fs.unlink(zipPath);
+      } catch (cleanupError) {
+        console.error('Error deleting uploaded zip:', cleanupError);
+      }
+    };
 
-    const moduleName = req.file.originalname.replace('.zip', '');
+    const providedName = sanitizeModuleName(req.body?.moduleName);
+    const fallbackName = sanitizeModuleName(req.file.originalname.replace(/\.zip$/i, ''));
+    const moduleName = providedName || fallbackName;
+
+    if (!moduleName) {
+      await removeUploadedZip();
+      return res.status(400).json({
+        status: 'error',
+        error: 'Nombre de módulo inválido. Usa letras, números, guiones y guiones bajos.'
+      });
+    }
+
     const targetDir = join(__dirname, 'apps', moduleName);
+    const targetExists = await fs.access(targetDir)
+      .then(() => true)
+      .catch(() => false);
+
+    if (targetExists) {
+      await removeUploadedZip();
+      return res.status(409).json({
+        status: 'error',
+        error: 'Ya existe un módulo con ese nombre. Elige un nombre diferente.'
+      });
+    }
 
     await fs.mkdir(targetDir, { recursive: true });
+
+    const zip = new AdmZip(zipPath);
     zip.extractAllTo(targetDir, true);
 
-    await fs.unlink(zipPath);
+    await removeUploadedZip();
+
+    res.setHeader('Content-Type', 'application/json');
 
     const hasPackageJson = await fs.access(join(targetDir, 'package.json'))
       .then(() => true)
@@ -251,10 +324,25 @@ app.post('/api/upload', upload.single('module'), async (req, res) => {
 
   } catch (error) {
     console.error('Error processing upload:', error);
-    res.status(500).json({
-      status: 'error',
-      error: 'Error procesando el archivo'
-    });
+    if (req.file?.path) {
+      try {
+        await fs.unlink(req.file.path);
+      } catch (cleanupError) {
+        console.error('Error deleting uploaded zip after failure:', cleanupError);
+      }
+    }
+
+    if (res.headersSent) {
+      res.write(
+        JSON.stringify({ status: 'error', error: 'Error procesando el archivo' }) + '\n'
+      );
+      res.end();
+    } else {
+      res.status(500).json({
+        status: 'error',
+        error: 'Error procesando el archivo'
+      });
+    }
   }
 });
 
