@@ -133,6 +133,70 @@ function App() {
     setIsDocsActive(false);
   };
 
+  const handleDeleteApp = async (appName: string) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar el módulo "${displayNameMap[appName] || appName}"? Esta acción no se puede deshacer.`)) {
+      return; // User cancelled the deletion
+    }
+
+    try {
+      const response = await fetch(`http://localhost:3001/api/apps/${encodeURIComponent(appName)}`, {
+        method: 'DELETE',
+      });
+      
+      const responseData = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(responseData.error || 'Error al eliminar la aplicación');
+      }
+      
+      // Update the app list
+      await loadApps();
+      
+      // Clear selection if the deleted app was selected
+      if (selectedApp?.name === appName) {
+        setSelectedApp(null);
+        setIsDocsActive(false);
+      }
+      
+      // Clean up display name mapping
+      setDisplayNameMap(prev => {
+        const newMap = { ...prev };
+        delete newMap[appName];
+        return newMap;
+      });
+      
+      // Show success message
+      alert(`✅ Módulo "${displayNameMap[appName] || appName}" eliminado exitosamente`);
+      
+    } catch (error: unknown) {
+      console.error('Error deleting app:', error);
+      
+      // More specific error messages based on error code
+      let errorMessage = 'Error al eliminar el módulo';
+      
+      if (error && typeof error === 'object') {
+        const err = error as { code?: string; message?: string };
+        
+        if (err.code === 'EBUSY') {
+          errorMessage = 'No se pudo eliminar el módulo porque algunos archivos están en uso. Por favor, cierre cualquier programa que esté usando estos archivos e intente nuevamente.';
+        } else if (err.message?.includes('ENOENT')) {
+          errorMessage = 'El módulo no se encontró o ya fue eliminado.';
+        } else if (err.message) {
+          errorMessage = err.message;
+        }
+      }
+      
+      alert(`❌ ${errorMessage}`);
+      
+      // Try to reload the app list to ensure consistency
+      try {
+        await loadApps();
+      } catch (e) {
+        console.error('Error reloading apps after deletion error:', e);
+      }
+    }
+  };
+
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar
@@ -148,6 +212,7 @@ function App() {
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         isDocsActive={isDocsActive}
         displayNameMap={displayNameMap}
+        onDeleteApp={handleDeleteApp}
       />
       <AppViewer
         selectedApp={selectedApp}

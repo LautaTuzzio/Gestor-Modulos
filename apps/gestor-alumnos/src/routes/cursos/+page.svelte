@@ -4,6 +4,7 @@
     import { page } from "$app/stores";
 
     type Materia = any;
+    type Teacher = any;
 
     let cursoSeleccionado: Curso | null = null;
     let materiaEditando: Materia | null = null;
@@ -15,10 +16,26 @@
     let mostrarFormMateria = false;
 
     let nuevoCurso = { curso: "", turno: "" };
-    let formMateriaData = { id: "", nombre: "", profesor: "" };
+    let formMateriaData = { id: "", nombre: "", teacher_id: "" };
+    
+    let materiasDisponibles: Materia[] = [];
+    let profesoresDisponibles: Teacher[] = [];
 
     $: cursos = Array.isArray($page.data.cursos) ? $page.data.cursos : [];
     $: materias = Array.isArray($page.data.materias) ? $page.data.materias : [];
+    $: teachers = Array.isArray($page.data.teachers) ? $page.data.teachers : [];
+    
+    // Mostrar todas las materias disponibles
+    $: {
+        materiasDisponibles = [...new Set(materias.map(m => m.nombre))].sort();
+    }
+    
+    // Mostrar todos los profesores disponibles
+    $: {
+        profesoresDisponibles = [...teachers].sort((a, b) => 
+            `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`)
+        );
+    }
 
     $: {
         if (cursoSeleccionado) {
@@ -38,17 +55,22 @@
         (c.curso || "").toLowerCase().includes(filtroCurso.toLowerCase()),
     );
 
-    $: materiasFiltradas = materias.filter((m: Materia) => {
-        if (!cursoSeleccionado) return false;
-
-        const coincideCurso = m.curso_id === cursoSeleccionado.id;
-
-        const coincideFiltro = (m.nombre || "")
-            .toLowerCase()
-            .includes(filtroMateria.toLowerCase());
-
-        return coincideCurso && coincideFiltro;
-    });
+    $: materiasFiltradas = materias
+        .filter((m: Materia) => {
+            if (!cursoSeleccionado) return false;
+            
+            const coincideCurso = m.curso_id === cursoSeleccionado.id;
+            const coincideFiltro = (m.nombre || "")
+                .toLowerCase()
+                .includes(filtroMateria.toLowerCase());
+                
+            return coincideCurso && coincideFiltro;
+        })
+        .map(materia => ({
+            ...materia,
+            // Add teacher info to each materia
+            teacherInfo: teachers.find(t => t.id === materia.teacher_id) || null
+        }));
 
     function seleccionarCurso(curso: Curso) {
         cursoSeleccionado = curso;
@@ -61,16 +83,15 @@
         materiaEditando = materia;
         formMateriaData = {
             id: materia.id,
-            nombre: materia.nombre,
-
-            profesor: materia.profesor || "",
+            nombre: materia.nombre || "",
+            teacher_id: materia.teacher_id?.toString() || "",
         };
         mostrarFormMateria = true;
     }
 
     function resetFormularioMateria() {
         materiaEditando = null;
-        formMateriaData = { id: "", nombre: "", profesor: "" };
+        formMateriaData = { id: "", nombre: "", teacher_id: "" };
         mostrarFormMateria = false;
     }
 
@@ -206,19 +227,33 @@
                         value={cursoSeleccionado?.id || ""}
                     />
 
-                    <input
-                        type="text"
+                    <select
                         name="nombre"
-                        placeholder="Nombre de la materia"
                         bind:value={formMateriaData.nombre}
                         required
-                    />
-                    <input
-                        type="text"
-                        name="profesor"
-                        placeholder="Profesor"
-                        bind:value={formMateriaData.profesor}
-                    />
+                    >
+                        <option value="" disabled selected>Seleccione una materia</option>
+                        {#each materiasDisponibles as materia}
+                            <option value={materia}>{materia}</option>
+                        {/each}
+                    </select>
+
+                    <select
+                        name="teacher_id"
+                        bind:value={formMateriaData.teacher_id}
+                        required
+                        disabled={!formMateriaData.nombre}
+                    >
+                        <option value="" disabled selected>
+                            {formMateriaData.nombre ? 'Seleccione un profesor' : 'Seleccione una materia primero'}
+                        </option>
+                        {#if formMateriaData.nombre}
+                            {#each profesoresDisponibles as profesor}
+                                <option value={profesor.id}>{profesor.first_name} {profesor.last_name}</option>
+                            {/each}
+                        {/if}
+                    </select>
+
                     <button
                         class="btn btn-verde"
                         type="submit"
@@ -247,8 +282,8 @@
                 {#each materiasFiltradas as materia, i}
                     <tr>
                         <td>{i + 1}</td>
-                        <td>{materia.nombre}</td>
-                        <td>{materia.profesor || "-"}</td>
+                        <td>{materia.nombre || "-"}</td>
+                        <td>{materia.teacherInfo ? `${materia.teacherInfo.first_name} ${materia.teacherInfo.last_name}` : materia.profesor || "-"}</td>
                         <td class="acciones">
                             <button
                                 class="btn btn-amarillo"

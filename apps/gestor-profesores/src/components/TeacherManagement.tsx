@@ -237,9 +237,6 @@ export default function TeacherManagement() {
                   Estado
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Materias
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Acciones
                 </th>
               </tr>
@@ -277,22 +274,6 @@ export default function TeacherManagement() {
                     >
                       {teacher.employment_status}
                     </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    {teacher.subjects && teacher.subjects.length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {teacher.subjects.map((subject) => (
-                          <span
-                            key={subject.id}
-                            className="inline-flex px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-md border border-gray-200"
-                          >
-                            {subject.name}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <span className="text-sm text-gray-400 italic">Sin materias</span>
-                    )}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">

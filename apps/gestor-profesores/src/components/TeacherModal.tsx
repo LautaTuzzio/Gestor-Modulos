@@ -288,10 +288,11 @@ export default function TeacherModal({ teacher, subjects, onClose, onSuccess }: 
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Materias Asignadas
-            </label>
+          {isEditing && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Materias Asignadas
+              </label>
               <input
                 type="text"
                 value={subjectFilter}
@@ -322,7 +323,8 @@ export default function TeacherModal({ teacher, subjects, onClose, onSuccess }: 
                   </p>
                 )}
               </div>
-          </div>
+            </div>
+          )}
 
           <div className="flex gap-3 pt-4 border-t border-gray-200">
             <button

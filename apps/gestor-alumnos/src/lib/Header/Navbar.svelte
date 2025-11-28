@@ -5,7 +5,7 @@
 <div class="cont_items">
     <!-- svelte-ignore a11y_consider_explicit_label -->
     <!-- svelte-ignore a11y_missing_attribute -->
-    <a class="cont_item" href="./alumnos/lista">
+    <a class="cont_item" href="/alumnos/lista">
         <svg
             class="icon"
             width="46"
@@ -34,7 +34,7 @@
     </a>
     <!-- svelte-ignore a11y_consider_explicit_label -->
     <!-- svelte-ignore a11y_missing_attribute -->
-    <a class="cont_item" href="./agregar">
+    <a class="cont_item" href="/alumnos/agregar">
         <svg
             class="icon"
             width="46"

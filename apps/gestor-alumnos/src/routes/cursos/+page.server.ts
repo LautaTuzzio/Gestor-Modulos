@@ -22,8 +22,18 @@ export const load: PageServerLoad = async ({ params }) => {
         throw error(500, 'Error al obtener los cursos.');
     }
 
-    if (cursos && materias) {
-        return { cursos, materias };
+    const { data: teachers, error: fetchErrorTeachers } = await supabase
+        .from('teachers')
+        .select('*')
+        .eq('is_active', true)
+        .order('first_name', { ascending: true });
+    if (fetchErrorTeachers) {
+        console.error('Error al obtener los profesores:', fetchErrorTeachers.message);
+        throw error(500, 'Error al obtener los profesores.');
+    }
+
+    if (cursos && materias && teachers) {
+        return { cursos, materias, teachers };
     }
     error(404, 'Not found');
 };
@@ -52,17 +62,28 @@ export const actions = {
     agregarMateria: async ({ request }: { request: Request }) => {
         const data = await request.formData();
         const nombre = data.get('nombre')?.toString().trim();
-        const profesor = data.get('profesor')?.toString().trim();
-        const curso_id = data.get('curso_id') as string; // La ID del curso seleccionado
+        const teacher_id = data.get('teacher_id')?.toString().trim();
+        const curso_id = data.get('curso_id') as string;
 
-        if (!nombre || !curso_id) {
-            return fail(400, { error: 'El nombre de la materia y el curso son obligatorios.' });
+        if (!nombre || !teacher_id || !curso_id) {
+            return fail(400, { error: 'La materia, el profesor y el curso son obligatorios.' });
         }
+
+        // Obtener nombre del profesor
+        const { data: profesorData } = await supabase
+            .from('teachers')
+            .select('first_name, last_name')
+            .eq('id', teacher_id)
+            .single();
+
+        const nombreProfesor = profesorData 
+            ? `${profesorData.first_name} ${profesorData.last_name}` 
+            : '';
 
         const nuevaMateria = {
             nombre,
-            curso_id,
-            profesor
+            profesor: nombreProfesor,
+            curso_id
         };
 
         const { error: insertError } = await supabase.from('materias').insert([nuevaMateria]);
@@ -79,15 +100,26 @@ export const actions = {
         const data = await request.formData();
         const id = data.get('id') as string;
         const nombre = data.get('nombre')?.toString().trim();
-        const profesor = data.get('profesor')?.toString().trim();
+        const teacher_id = data.get('teacher_id')?.toString().trim();
 
-        if (!id || !nombre) {
-            return fail(400, { error: 'ID y Nombre son obligatorios para editar.' });
+        if (!id || !nombre || !teacher_id) {
+            return fail(400, { error: 'ID, nombre de materia y profesor son obligatorios para editar.' });
         }
+
+        // Obtener nombre del profesor
+        const { data: profesorData } = await supabase
+            .from('teachers')
+            .select('first_name, last_name')
+            .eq('id', teacher_id)
+            .single();
+
+        const nombreProfesor = profesorData 
+            ? `${profesorData.first_name} ${profesorData.last_name}` 
+            : '';
 
         const materiaActualizada = {
             nombre,
-            profesor,
+            profesor: nombreProfesor,
         };
 
         const { error: updateError } = await supabase

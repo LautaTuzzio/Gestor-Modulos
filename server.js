@@ -346,6 +346,58 @@ app.post('/api/upload', upload.single('module'), async (req, res) => {
   }
 });
 
+// Endpoint para eliminar una aplicación
+app.delete('/api/apps/:name', async (req, res) => {
+  try {
+    const { name } = req.params;
+    const appPath = join(__dirname, 'apps', name);
+    
+    // First, try to stop the dev server
+    if (devServers.has(name)) {
+      const server = devServers.get(name);
+      server.process.kill('SIGKILL'); // Force kill the process
+      devServers.delete(name);
+      // Give the process a moment to fully terminate
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    // Try to delete the directory with force and retry on EBUSY
+    let retries = 3;
+    let lastError = null;
+    
+    while (retries > 0) {
+      try {
+        await fs.rm(appPath, { 
+          recursive: true, 
+          force: true, 
+          maxRetries: 3, 
+          retryDelay: 1000 
+        });
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error;
+        retries--;
+        if (retries === 0) break;
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+      }
+    }
+    
+    if (lastError) {
+      console.error('Failed to delete directory after retries:', lastError);
+      throw lastError;
+    }
+    
+    res.json({ success: true, message: 'Aplicación eliminada exitosamente' });
+  } catch (error) {
+    console.error('Error deleting app:', error);
+    res.status(500).json({ 
+      error: `Error al eliminar la aplicación: ${error.message}`,
+      code: error.code
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });

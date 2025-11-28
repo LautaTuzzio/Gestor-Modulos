@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, FileText, Plus, Zap } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileText, Plus, Trash2, Zap } from 'lucide-react';
 import { AppInfo } from '../App';
 
 interface SidebarProps {
@@ -11,6 +11,7 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   isDocsActive: boolean;
   displayNameMap: Record<string, string>;
+  onDeleteApp: (appName: string) => void;
 }
 
 export function Sidebar({
@@ -22,7 +23,8 @@ export function Sidebar({
   isDocsActive,
   isCollapsed,
   onToggleCollapse,
-  displayNameMap
+  displayNameMap,
+  onDeleteApp
 }: SidebarProps) {
   return (
     <div
@@ -53,7 +55,7 @@ export function Sidebar({
             <button
               key={app.name}
               onClick={() => onSelectApp(app)}
-              className={`w-full p-3 mb-2 rounded-lg text-left transition-colors ${
+              className={`w-full p-3 mb-2 rounded-lg text-left transition-colors group ${
                 selectedApp?.name === app.name
                   ? 'bg-blue-600 hover:bg-blue-700'
                   : 'hover:bg-slate-700'
@@ -70,11 +72,25 @@ export function Sidebar({
                   )}
                 </div>
               ) : (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium truncate">{displayName}</span>
-                  {app.isVite && app.isRunning && (
-                    <Zap className="w-4 h-4 text-yellow-400" />
-                  )}
+                <div className="flex items-center justify-between w-full">
+                  <span className="text-sm font-medium truncate flex-1">{displayName}</span>
+                  <div className="flex items-center gap-1">
+                    {app.isVite && app.isRunning && (
+                      <Zap className="w-4 h-4 text-yellow-400" />
+                    )}
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm(`¿Estás seguro de que deseas eliminar el módulo "${displayName}"? Esta acción no se puede deshacer.`)) {
+                          onDeleteApp(app.name);
+                        }
+                      }}
+                      className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 p-1 rounded-full hover:bg-red-900/30 transition-all"
+                      title="Eliminar módulo"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               )}
             </button>
