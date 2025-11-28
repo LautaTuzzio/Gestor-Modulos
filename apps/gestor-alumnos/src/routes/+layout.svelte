@@ -1,5 +1,6 @@
 <script>
 	import Header from "$lib/Header/Header.svelte";
+	import '$lib/../app.css';  // Ruta desde lib hacia arriba
 </script>
 
 <div>
@@ -7,11 +8,3 @@
 </div>
 
 <slot />
-
-<style>
-	* {
-		margin: 0px;
-		box-sizing: border-box;
-		padding: 0px;
-	}
-</style>

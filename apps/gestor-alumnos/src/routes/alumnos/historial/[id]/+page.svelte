@@ -69,7 +69,7 @@
 </script>
 
 <svelte:head>
-    <!-- <script src="https://cdn.tailwindcss.com"></script>
+     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         :global(body) {
@@ -79,7 +79,7 @@
         .scroll-container {
             max-height: calc(100vh - 200px); 
         }
-    </style> -->
+    </style> 
 </svelte:head>
 
 <div class="p-4 md:p-8 max-w-7xl mx-auto">
@@ -505,7 +505,3 @@
     </div>
 {/if}
 
-<style>
-
-    @import "tailwindcss";
-</style>
