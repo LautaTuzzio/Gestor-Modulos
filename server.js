@@ -6,6 +6,7 @@ import { dirname, join } from 'path';
 import { promises as fs } from 'fs';
 import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
+import os from 'os';
 
 const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
@@ -31,6 +32,48 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage });
+
+const RESERVED_MODULE_NAMES = new Set([
+  'con',
+  'prn',
+  'aux',
+  'nul',
+  'com1',
+  'com2',
+  'com3',
+  'com4',
+  'com5',
+  'com6',
+  'com7',
+  'com8',
+  'com9',
+  'lpt1',
+  'lpt2',
+  'lpt3',
+  'lpt4',
+  'lpt5',
+  'lpt6',
+  'lpt7',
+  'lpt8',
+  'lpt9'
+]);
+
+function sanitizeModuleName(value) {
+  if (!value) return '';
+  const sanitized = value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-_]/g, '')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
+
+  if (!sanitized || RESERVED_MODULE_NAMES.has(sanitized) || sanitized.length > 64) {
+    return '';
+  }
+
+  return sanitized;
+}
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -99,6 +142,54 @@ function startViteDevServer(appName, appPath, port) {
       }
     }, 30000);
   });
+}
+
+// Función para matar todos los procesos usando un puerto específico
+async function killProcessesByPort(port) {
+  try {
+    const isWindows = os.platform() === 'win32';
+    if (isWindows) {
+      // En Windows, usar netstat para encontrar el PID y taskkill para matarlo
+      const { stdout } = await execAsync(`netstat -ano | findstr :${port}`);
+      const lines = stdout.split('\n').filter(line => line.trim());
+      const pids = new Set();
+      
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        const pid = parts[parts.length - 1];
+        if (pid && pid !== 'PID' && !isNaN(pid)) {
+          pids.add(pid);
+        }
+      }
+      
+      for (const pid of pids) {
+        try {
+          await execAsync(`taskkill /PID ${pid} /F /T`);
+          console.log(`Killed process ${pid} using port ${port}`);
+        } catch (error) {
+          console.log(`Could not kill process ${pid}: ${error.message}`);
+        }
+      }
+    } else {
+      // En Unix/Linux, usar lsof
+      try {
+        const { stdout } = await execAsync(`lsof -i :${port} -t`);
+        const pids = stdout.trim().split('\n').filter(pid => pid);
+        for (const pid of pids) {
+          try {
+            await execAsync(`kill -9 ${pid}`);
+            console.log(`Killed process ${pid} using port ${port}`);
+          } catch (error) {
+            console.log(`Could not kill process ${pid}: ${error.message}`);
+          }
+        }
+      } catch (error) {
+        console.log(`Could not find processes on port ${port}`);
+      }
+    }
+  } catch (error) {
+    console.error(`Error killing processes by port ${port}:`, error.message);
+  }
 }
 
 // Función para detener un dev server
@@ -180,16 +271,47 @@ app.post('/api/upload', upload.single('module'), async (req, res) => {
     }
 
     const zipPath = req.file.path;
-    const zip = new AdmZip(zipPath);
-    const zipEntries = zip.getEntries();
+    const removeUploadedZip = async () => {
+      try {
+        await fs.unlink(zipPath);
+      } catch (cleanupError) {
+        console.error('Error deleting uploaded zip:', cleanupError);
+      }
+    };
 
-    const moduleName = req.file.originalname.replace('.zip', '');
+    const providedName = sanitizeModuleName(req.body?.moduleName);
+    const fallbackName = sanitizeModuleName(req.file.originalname.replace(/\.zip$/i, ''));
+    const moduleName = providedName || fallbackName;
+
+    if (!moduleName) {
+      await removeUploadedZip();
+      return res.status(400).json({
+        status: 'error',
+        error: 'Nombre de módulo inválido. Usa letras, números, guiones y guiones bajos.'
+      });
+    }
+
     const targetDir = join(__dirname, 'apps', moduleName);
+    const targetExists = await fs.access(targetDir)
+      .then(() => true)
+      .catch(() => false);
+
+    if (targetExists) {
+      await removeUploadedZip();
+      return res.status(409).json({
+        status: 'error',
+        error: 'Ya existe un módulo con ese nombre. Elige un nombre diferente.'
+      });
+    }
 
     await fs.mkdir(targetDir, { recursive: true });
+
+    const zip = new AdmZip(zipPath);
     zip.extractAllTo(targetDir, true);
 
-    await fs.unlink(zipPath);
+    await removeUploadedZip();
+
+    res.setHeader('Content-Type', 'application/json');
 
     const hasPackageJson = await fs.access(join(targetDir, 'package.json'))
       .then(() => true)
@@ -251,9 +373,92 @@ app.post('/api/upload', upload.single('module'), async (req, res) => {
 
   } catch (error) {
     console.error('Error processing upload:', error);
-    res.status(500).json({
-      status: 'error',
-      error: 'Error procesando el archivo'
+    if (req.file?.path) {
+      try {
+        await fs.unlink(req.file.path);
+      } catch (cleanupError) {
+        console.error('Error deleting uploaded zip after failure:', cleanupError);
+      }
+    }
+
+    if (res.headersSent) {
+      res.write(
+        JSON.stringify({ status: 'error', error: 'Error procesando el archivo' }) + '\n'
+      );
+      res.end();
+    } else {
+      res.status(500).json({
+        status: 'error',
+        error: 'Error procesando el archivo'
+      });
+    }
+  }
+});
+
+// Endpoint para eliminar una aplicación
+app.delete('/api/apps/:name', async (req, res) => {
+  try {
+    const { name } = req.params;
+    const appPath = join(__dirname, 'apps', name);
+    
+    // First, try to stop the dev server if tracked
+    if (devServers.has(name)) {
+      const server = devServers.get(name);
+      server.process.kill('SIGKILL'); // Force kill the process
+      
+      // Also kill any processes using the port
+      if (server.port) {
+        await killProcessesByPort(server.port);
+      }
+      
+      devServers.delete(name);
+      // Give the process a moment to fully terminate
+      await new Promise(resolve => setTimeout(resolve, 1500));
+    }
+    
+    // Try to delete the directory with force and retry on EBUSY
+    let retries = 5;
+    let lastError = null;
+    
+    while (retries > 0) {
+      try {
+        await fs.rm(appPath, { 
+          recursive: true, 
+          force: true, 
+          maxRetries: 3, 
+          retryDelay: 1000 
+        });
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error;
+        retries--;
+        if (retries === 0) break;
+        
+        // If it's a port-related error, try to kill processes on common ports
+        if (error.code === 'EBUSY' || error.message.includes('EBUSY')) {
+          console.log(`Directory busy, attempting to kill processes...`);
+          // Try common dev server ports
+          for (let port = 3000; port <= 5200; port++) {
+            await killProcessesByPort(port);
+          }
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 1500)); // Wait 1.5 seconds before retry
+      }
+    }
+    
+    if (lastError) {
+      console.error('Failed to delete directory after retries:', lastError);
+      throw lastError;
+    }
+    
+    res.json({ success: true, message: 'Aplicación eliminada exitosamente' });
+  } catch (error) {
+    console.error('Error deleting app:', error);
+    res.status(500).json({ 
+      error: `Error al eliminar la aplicación: ${error.message}`,
+      code: error.code
     });
   }
 });

@@ -1,7 +1,6 @@
 export interface Subject {
   id: string;
-  name: string;
-  code: string;
+  nombre: string;
   created_at: string;
   updated_at: string;
 }

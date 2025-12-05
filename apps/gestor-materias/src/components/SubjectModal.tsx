@@ -5,22 +5,19 @@ import type { Subject } from '../types/subject';
 interface SubjectModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: { name: string; code: string }) => void;
+  onSave: (data: { nombre: string }) => void;
   subject?: Subject | null;
 }
 
 export function SubjectModal({ isOpen, onClose, onSave, subject }: SubjectModalProps) {
-  const [name, setName] = useState('');
-  const [code, setCode] = useState('');
+  const [nombre, setNombre] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (subject) {
-      setName(subject.name);
-      setCode(subject.code);
+      setNombre(subject.nombre);
     } else {
-      setName('');
-      setCode('');
+      setNombre('');
     }
     setError('');
   }, [subject, isOpen]);
@@ -30,14 +27,13 @@ export function SubjectModal({ isOpen, onClose, onSave, subject }: SubjectModalP
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!name.trim() || !code.trim()) {
-      setError('Todos los campos son obligatorios');
+    if (!nombre.trim()) {
+      setError('El nombre es obligatorio');
       return;
     }
 
-    onSave({ name: name.trim(), code: code.trim() });
-    setName('');
-    setCode('');
+    onSave({ nombre: nombre.trim() });
+    setNombre('');
     setError('');
   };
 
@@ -58,30 +54,16 @@ export function SubjectModal({ isOpen, onClose, onSave, subject }: SubjectModalP
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="nombre" className="block text-sm font-medium text-gray-700 mb-1">
               Nombre de la Materia
             </label>
             <input
               type="text"
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              id="nombre"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Ej: Matemáticas"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="code" className="block text-sm font-medium text-gray-700 mb-1">
-              Código
-            </label>
-            <input
-              type="text"
-              id="code"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Ej: MAT101"
             />
           </div>
 

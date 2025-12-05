@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { BookOpen, Plus, Search, Edit2, Trash2 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { SubjectModal } from './components/SubjectModal';
+import { logSubjectAction } from './components/workflows/logs';
 import type { Subject } from './types/subject';
 
 function App() {
@@ -23,8 +24,7 @@ function App() {
     } else {
       const filtered = subjects.filter(
         (subject) =>
-          subject.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          subject.code.toLowerCase().includes(searchTerm.toLowerCase())
+          subject.nombre.toLowerCase().includes(searchTerm.toLowerCase())
       );
       setFilteredSubjects(filtered);
     }
@@ -34,7 +34,7 @@ function App() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('subjects')
+        .from('materias')
         .select('*')
         .order('created_at', { ascending: false });
 
@@ -50,21 +50,27 @@ function App() {
     }
   };
 
-  const handleSaveSubject = async (data: { name: string; code: string }) => {
+  const handleSaveSubject = async (data: { nombre: string }) => {
     try {
       if (editingSubject) {
         const { error } = await supabase
-          .from('subjects')
-          .update({ name: data.name, code: data.code })
+          .from('materias')
+          .update({ nombre: data.nombre })
           .eq('id', editingSubject.id);
 
         if (error) throw error;
+        
+        // Log the update action
+        await logSubjectAction('UPDATE', data.nombre);
       } else {
         const { error } = await supabase
-          .from('subjects')
-          .insert([{ name: data.name, code: data.code }]);
+          .from('materias')
+          .insert([{ nombre: data.nombre }]);
 
         if (error) throw error;
+        
+        // Log the create action
+        await logSubjectAction('CREATE', data.nombre);
       }
 
       await fetchSubjects();
@@ -85,19 +91,21 @@ function App() {
     setIsModalOpen(true);
   };
 
-  const handleDeleteSubject = async (id: string) => {
+  const handleDeleteSubject = async (subject: Subject) => {
     if (!confirm('¿Estás seguro de que deseas eliminar esta materia?')) {
       return;
     }
 
     try {
       const { error } = await supabase
-        .from('subjects')
+        .from('materias')
         .delete()
-        .eq('id', id);
+        .eq('id', subject.id);
 
       if (error) throw error;
 
+      // Log the delete action
+      await logSubjectAction('DELETE', subject.nombre);
       await fetchSubjects();
     } catch (err) {
       setError('Error al eliminar la materia');
@@ -151,7 +159,7 @@ function App() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
                 type="text"
-                placeholder="Buscar por nombre o código..."
+                placeholder="Buscar por nombre..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -183,9 +191,6 @@ function App() {
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Código
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Nombre
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -200,10 +205,7 @@ function App() {
                   {filteredSubjects.map((subject) => (
                     <tr key={subject.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-medium text-gray-900">{subject.code}</span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-gray-900">{subject.name}</span>
+                        <span className="text-sm text-gray-900">{subject.nombre}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm text-gray-500">
@@ -224,7 +226,7 @@ function App() {
                             <Edit2 className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => handleDeleteSubject(subject.id)}
+                            onClick={() => handleDeleteSubject(subject)}
                             className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             title="Eliminar"
                           >

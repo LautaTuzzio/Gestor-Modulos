@@ -9,27 +9,47 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
-      subjects: {
+      materias: {
         Row: {
           id: string;
-          name: string;
-          code: string;
+          nombre: string;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
-          name: string;
-          code: string;
+          nombre: string;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
-          name?: string;
-          code?: string;
+          nombre?: string;
           created_at?: string;
           updated_at?: string;
+        };
+      };
+      logs: {
+        Row: {
+          id?: string;
+          modulo: string;
+          log: string;
+          Code: '' | 'CREATE' | 'UPDATE' | 'DELETE';
+          fecha: string;
+        };
+        Insert: {
+          id?: string;
+          modulo: string;
+          log: string;
+          Code: '' | 'CREATE' | 'UPDATE' | 'DELETE';
+          fecha: string;
+        };
+        Update: {
+          id?: string;
+          modulo?: string;
+          log?: string;
+          Code?: '' | 'CREATE' | 'UPDATE' | 'DELETE';
+          fecha?: string;
         };
       };
     };
