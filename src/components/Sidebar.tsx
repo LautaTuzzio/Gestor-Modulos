@@ -81,7 +81,13 @@ export function Sidebar({
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
+<<<<<<< HEAD
                         onDeleteApp(app.name);
+=======
+                        if (window.confirm(`¿Estás seguro de que deseas eliminar el módulo "${displayName}"? Esta acción no se puede deshacer.`)) {
+                          onDeleteApp(app.name);
+                        }
+>>>>>>> 37a0a15cddf46148672468e871c774ff0686d59f
                       }}
                       className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 p-1 rounded-full hover:bg-red-900/30 transition-all"
                       title="Eliminar módulo"

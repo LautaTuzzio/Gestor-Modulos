@@ -27,6 +27,7 @@ export function UploadModal({ isOpen, onClose, onUploadComplete }: UploadModalPr
       .toLowerCase();
   };
 
+<<<<<<< HEAD
   const validateZipContents = async (file: File): Promise<{ valid: boolean; error?: string }> => {
     try {
       const zip = new JSZip();
@@ -87,6 +88,9 @@ export function UploadModal({ isOpen, onClose, onUploadComplete }: UploadModalPr
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+=======
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+>>>>>>> 37a0a15cddf46148672468e871c774ff0686d59f
     const file = e.target.files?.[0];
     if (file && file.name.endsWith('.zip')) {
       // Validate ZIP contents

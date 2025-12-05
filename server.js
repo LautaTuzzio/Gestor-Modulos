@@ -401,6 +401,7 @@ app.delete('/api/apps/:name', async (req, res) => {
     const { name } = req.params;
     const appPath = join(__dirname, 'apps', name);
     
+<<<<<<< HEAD
     // First, try to stop the dev server if tracked
     if (devServers.has(name)) {
       const server = devServers.get(name);
@@ -418,6 +419,19 @@ app.delete('/api/apps/:name', async (req, res) => {
     
     // Try to delete the directory with force and retry on EBUSY
     let retries = 5;
+=======
+    // First, try to stop the dev server
+    if (devServers.has(name)) {
+      const server = devServers.get(name);
+      server.process.kill('SIGKILL'); // Force kill the process
+      devServers.delete(name);
+      // Give the process a moment to fully terminate
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    // Try to delete the directory with force and retry on EBUSY
+    let retries = 3;
+>>>>>>> 37a0a15cddf46148672468e871c774ff0686d59f
     let lastError = null;
     
     while (retries > 0) {
@@ -434,6 +448,7 @@ app.delete('/api/apps/:name', async (req, res) => {
         lastError = error;
         retries--;
         if (retries === 0) break;
+<<<<<<< HEAD
         
         // If it's a port-related error, try to kill processes on common ports
         if (error.code === 'EBUSY' || error.message.includes('EBUSY')) {
@@ -445,6 +460,9 @@ app.delete('/api/apps/:name', async (req, res) => {
         }
         
         await new Promise(resolve => setTimeout(resolve, 1500)); // Wait 1.5 seconds before retry
+=======
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+>>>>>>> 37a0a15cddf46148672468e871c774ff0686d59f
       }
     }
     

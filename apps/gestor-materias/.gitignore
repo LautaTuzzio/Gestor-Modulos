@@ -7,6 +7,10 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+<<<<<<< HEAD
+=======
+
+>>>>>>> 37a0a15cddf46148672468e871c774ff0686d59f
 *.local
 
 .vscode/*
